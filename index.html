@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPT Web Interface</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>Skapari 2.5</h1>
+    <div class="container">
+        <div class="left-side">
+            <form id="elevProfiler">
+                <label for="fileInput">Last opp elevprofiler her</label>
+                <input type ="file" id="fileInput" accept=".doc, .docx" required>
+                <button type="submit">Last opp</button>
+            </form>        
+            <div>
+                <label for="userInput">Skriv inn ditt prompt:</label>
+                <textarea id="userInput" placeholder="Skriv ha slags type oppgave og navnet på eleven" rows="4" cols="50"></textarea>
+                <br>
+                <button id="sendButton" disabled>Send</button>
+            </div>
+            <p>Lag en oppgave til elev x som handler om temaet brøk, desimaltall eller prosent.</p>
+            <br><br>
+            <p>Som utgangspunkt for denne oppgaven skal du bruke det eleven ønsker å bli når den blir stor. Lag en oppgave til elev x som handler om temaet brøk, desimaltall eller prosent.</p>
+        </div>
+        <div class="right-side">
+            <div>
+                <label for="gptResponse">Generert oppgave</label>
+                <textarea id="gptResponse" placeholder="Oppgaven kommer her" rows="4" cols="50" readonly></textarea>
+            </div>        
+            <div>
+                <label for="evaluationResponse">Evaluering av oppgaven</label>
+                <textarea id="evaluationResponse" placeholder="Evalueringen kommer her" rows="4" cols="50" readonly></textarea>
+            </div>
+        </div>
+    </div>
+    
+
+    <script>
+        let uploadedFile = null;
+
+        document.getElementById("elevProfiler").addEventListener("submit", function(event) {
+            event.preventDefault();
+            const fileInput = document.getElementById("fileInput").files[0];
+
+            if (fileInput) {
+                const formData = new FormData();
+                formData.append("file", fileInput);
+
+                fetch("http://localhost:5000/upload_profiles", {
+                    method: "POST",
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.extracted_text) {
+                        alert("Profiler lastet opp!");
+                        uploadedFile = data.extracted_text; // Store the extracted text
+                        document.getElementById("sendButton").disabled = false;
+                    } else {
+                        alert("Feil: " + data.error);
+                    }
+                })
+                .catch(error => alert("Error: " + error));
+            } else {
+                alert("Velg en fil før du laster opp.");
+            }
+        });
+
+        function autoResizeTextArea(textarea) {
+    textarea.style.height = "auto"; // Tilbakestill høyden først
+    textarea.style.height = `${textarea.scrollHeight}px`; // Sett ny høyde basert på innhold
+}
+
+        document.getElementById("sendButton").addEventListener("click", function() {
+    const userInput = document.getElementById("userInput").value;
+    if (!uploadedFile) {
+        alert("Please upload a file first.");
+        return;
+    }
+
+    const requestData = {
+        prompt: userInput,
+        profiles_text: uploadedFile
+    };
+
+    fetch("http://localhost:5000/api/gpt", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(requestData),
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log(data)
+                const gptResponseField = document.getElementById("gptResponse");
+                const evaluationResponseField = document.getElementById("evaluationResponse");
+
+                if (data.generated_task) {
+                    gptResponseField.value = data.generated_task;
+                } else {
+                    gptResponseField.value = "Error: " + (data.error || "No task generated");
+                }
+
+                if (data.evaluation && data.evaluation !== data.generated_task) {
+                    evaluationResponseField.value = data.evaluation;
+                } else {
+                    evaluationResponseField.value = "Error: " + (data.error || "No evaluation available");
+                }
+                autoResizeTextArea(gptResponseField);
+                autoResizeTextArea(evaluationResponseField);
+                })
+            });
+
+    </script>
+</body>
+</html>
